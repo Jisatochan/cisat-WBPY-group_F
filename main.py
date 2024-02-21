@@ -1,25 +1,54 @@
-import streamlit as st
 import os
-import tkinter as tk
-from tkinter import *
 import PyPDF2
 import pyttsx3
-from tkinter import filedialog
+import streamlit as st
+import tempfile
 
-# Set the directory where your audiobooks are stored
-AUDIOBOOK_DIR = '/path/to/your/audiobooks'
+st.title("AUDIOBOOK")
 
-def main():
-    st.title('Audiobook Streamlit App')
+uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
 
-    # Get a list of all audiobook files
-    audiobooks = os.listdir(AUDIOBOOK_DIR)
+if uploaded_file:
+    pdfReader = PyPDF2.PdfReader(uploaded_file)
 
-    # Create a select box for the user to choose an audiobook
-    selected_audiobook = st.selectbox('Choose an audiobook:', audiobooks)
+    voices = pyttsx3.init().getProperty('voices')
+    selected_voice = st.radio("Select a voice:", ("Male", "Female"))
 
-    # Create an audio player for the selected audiobook
-    st.audio(os.path.join(AUDIOBOOK_DIR, selected_audiobook))
+    if st.button("Read PDF with Selected Voice"):
+        speaker = pyttsx3.init()
 
-if __name__ == "__main__":
-    main()
+        text = ""
+        for page_num in range(len(pdfReader.pages)):
+            page = pdfReader.pages[page_num]
+            text += page.extract_text()
+
+        if selected_voice == "Male":
+            speaker.setProperty('voice', voices[0].id)
+        elif selected_voice == "Female":
+            speaker.setProperty('voice', voices[1].id)
+
+        read_process_placeholder = st.empty()
+
+        # Create a Streamlit column layout to display the text and PDF side by side
+        col1, col2 = st.columns([2, 3])
+
+        with col1:
+            st.text_area("Text from PDF", value=text, height=400)
+
+        with col2:
+            st.write("## PDF Content")
+            for page_num in range(len(pdfReader.pages)):
+                page = pdfReader.pages[page_num]
+                st.write(page.extract_text())
+
+        with st.spinner("Reading PDF..."):
+            speaker.say(text)
+            speaker.runAndWait()
+
+        with st.spinner("Saving audio file..."):
+            with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+                speaker.save_to_file(text, temp_file.name)
+                temp_file.flush()
+                st.audio(temp_file.name, format='audio/mp3')
+
+        st.success("The Audio File is Saved")
