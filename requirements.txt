@@ -1,6 +1,6 @@
 PyPDF2
  os
-streamlit as st
+streamlit
 gtts
 tempfile
 time
