@@ -1,6 +1,7 @@
 PyPDF2
- os
+os
 streamlit
 gtts
 tempfile
 time
+py
