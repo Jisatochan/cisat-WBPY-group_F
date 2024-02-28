@@ -1,7 +1,1 @@
 PyPDF2
-os
-streamlit
-gtts
-tempfile
-time
-py
