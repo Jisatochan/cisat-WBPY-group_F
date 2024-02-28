@@ -1,0 +1,6 @@
+PyPDF2
+ os
+streamlit as st
+gtts
+tempfile
+time

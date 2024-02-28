@@ -1,43 +1,34 @@
 import os
-import PyPDF2
-import pyttsx3
 import streamlit as st
+import PyPDF2
+from gtts import gTTS
 import tempfile
+import time
 
-# Add CSS for background with an image
-st.markdown(
-    """
-    <style>
-    body {
-        background-image: url("https://edmroyaltyfree.net/no-copyright-edm-vol-1/blue-background/"); /* Set the URL of your background image */
-        background-size: cover;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+# Page 1: Upload PDF Files
+def upload_page():
+    st.title("Upload PDF Files")
+    uploaded_files = st.file_uploader("Upload PDF file(s)", accept_multiple_files=True, type="pdf")
 
-# Set the title of the Streamlit app
-st.title("AUDIOBOOK")
+    if uploaded_files:
+        for file in uploaded_files:
+            with open(os.path.join("uploads", file.name), "wb") as f:
+                f.write(file.getbuffer())
+        st.success("Files uploaded successfully.")
 
-# Allow users to upload a PDF file
-uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
+# Page 2: Audiobook Player
+def audiobook_player():
+    st.title("Audiobook Player")
 
-# If a PDF file is uploaded
-if uploaded_file:
-    # Read the PDF file using PyPDF2
-    pdfReader = PyPDF2.PdfReader(uploaded_file)
+    # Get list of uploaded PDF files
+    pdf_files = os.listdir("uploads")
+    selected_pdf = st.selectbox("Select PDF file", pdf_files, format_func=lambda filename: f'<img src="https://cdn-icons-png.flaticon.com/512/1165/1165284.png" width="20"/> {filename}' if filename else None)
 
-    # Initialize the pyttsx3 engine and get available voices
-    voices = pyttsx3.init().getProperty('voices')
+    if selected_pdf:
+        pdf_path = os.path.join("uploads", selected_pdf)
 
-    # Allow users to select a voice (male or female)
-    selected_voice = st.radio("Select a voice:", ("Male", "Female"))
-
-    # If the user clicks the button to read the PDF with the selected voice
-    if st.button("Read PDF with Selected Voice"):
-        # Initialize the pyttsx3 speaker
-        speaker = pyttsx3.init()
+        # Read the PDF file using PyPDF2
+        pdfReader = PyPDF2.PdfReader(pdf_path)
 
         # Extract text from the PDF
         text = ""
@@ -45,43 +36,65 @@ if uploaded_file:
             page = pdfReader.pages[page_num]
             text += page.extract_text()
 
-        # Set the selected voice based on user choice
-        if selected_voice == "Male":
-            speaker.setProperty('voice', voices[0].id)
-        elif selected_voice == "Female":
-            speaker.setProperty('voice', voices[1].id)
+        # Allow users to select a voice (male or female)
+        selected_voice = st.radio("Select a voice:", ("Male", "Female"))
 
-        # Create a placeholder for the read process
-        read_process_placeholder = st.empty()
+        # Controls for playback
+        col1, col2, col3 = st.columns(3)
+        paused = col2.button("Pause")
+        resumed = col2.button("Resume")
+        stopped = col2.button("Stop")
 
-        # Create a Streamlit column layout to display text and PDF side by side
-        col1, col2 = st.columns([2, 3])
+        if paused:
+            st.session_state.paused = True
 
-        # Display text from PDF in the first column
-        with col1:
-            st.text_area("Text from PDF", value=text, height=400)
+        if resumed:
+            st.session_state.paused = False
 
-        # Display PDF content in the second column
-        with col2:
-            st.write("## PDF Content")
-            for page_num in range(len(pdfReader.pages)):
-                page = pdfReader.pages[page_num]
-                st.write(page.extract_text())
+        if stopped:
+            st.session_state.paused = True
 
-        # Use a spinner to indicate that the PDF is being read
-        with st.spinner("Reading PDF..."):
-            # Read the text using the selected voice
-            speaker.say(text)
-            speaker.runAndWait()
-
-        # Use a spinner to indicate that the audio file is being saved
-        with st.spinner("Saving audio file..."):
-            # Save the audio to a temporary file
+        # Read the text using the selected voice
+        if not hasattr(st.session_state, 'paused') or not st.session_state.paused:
+            # Convert text to audio using gTTS
+            tts = gTTS(text=text, lang='en')
             with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-                speaker.save_to_file(text, temp_file.name)
-                temp_file.flush()
-                # Display the audio file to the user
-                st.audio(temp_file.name, format='audio/mp3')
+                tts.save(temp_file.name)
 
-        # Display a success message after the audio file is saved
-        st.success("The Audio File is Saved")
+                # Rewind the file pointer back to the beginning
+                temp_file.seek(0)
+
+                # Display the audio playback bar
+                audio_bytes = temp_file.read()
+                st.audio(audio_bytes, format='audio/mp3')
+
+                # Download button for audio file
+                st.download_button(label="Download Audio File", data=audio_bytes, file_name="audiobook.mp3", mime="audio/mp3")
+
+        # Display the progress bar for audio playback
+        if hasattr(st.session_state, 'paused') and not st.session_state.paused:
+            progress_bar = st.progress(0)
+            for i in range(101):
+                time.sleep(0.1)  # Simulate a delay
+                progress_bar.progress(i)
+
+        # Display PDF content in a popup window
+        if text:
+            st.write("## PDF Content")
+            st.write(text)
+
+# Main App
+def main():
+    st.set_page_config(page_title="Audiobook App", page_icon="📚")
+    st.sidebar.title("Navigation")
+    app_mode = st.sidebar.radio("Go to", ["Upload PDF Files", "Audiobook Player"])
+
+    if app_mode == "Upload PDF Files":
+        upload_page()
+    elif app_mode == "Audiobook Player":
+        audiobook_player()
+
+if __name__ == "__main__":
+    if not os.path.exists("uploads"):
+        os.makedirs("uploads")
+    main()
